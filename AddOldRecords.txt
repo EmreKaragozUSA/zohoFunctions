@@ -1,0 +1,15 @@
+listFromFile = {"Eric Lee", "Eric Seez"};
+newinfo = {"Account_Status":"PTO"};
+for each  item in listFromFile
+{
+	response = zoho.crm.searchRecords("Accounts","Account_Name:equals:" + item);
+	for each  rec in response
+	{
+		tempvar = rec.get("id");
+		response = zoho.crm.updateRecord("Accounts",tempvar,newinfo);
+	}
+}
+return "";
+
+
+

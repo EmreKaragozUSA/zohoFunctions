@@ -1,0 +1,174 @@
+latLongMap = Map();
+milestoneupdateMap = Map();
+account = zoho.crm.getRecordById("Accounts",accountId);
+account_street = account.get("Billing_Street");
+account_state = account.get("Billing_State");
+account_zip = account.get("Billing_Code");
+account_city = account.get("Billing_City");
+newstreet = replaceAll(account_street," ","+");
+newCity = replaceAll(account_city," ","+");
+newState = replaceAll(account_state," ","+");
+url = "https://geocoding.geo.census.gov/geocoder/locations/address?street=" + newstreet + "&city=" + newCity + "&state=" + account_state + "&zip=" + account_zip + "&benchmark=Public_AR_Census2020&format=json";
+// 	Milestones Update Start
+mod_time = account.get("Modified_Time");
+// 	Welcome Call
+// milestoneupdateMap.put("Welcome_Call",true);
+// milestoneupdateMap.put("Welcome_Call_Date_Time",mod_time);
+//Site Survey Started 	
+milestoneupdateMap.put("SS_Started",true);
+milestoneupdateMap.put("SS_Start_Date_Time",mod_time);
+// SS Complete
+milestoneupdateMap.put("SS_Scheduled",true);
+milestoneupdateMap.put("SS_Scheduled_Date_Time",mod_time);
+// CAD Started
+milestoneupdateMap.put("CAD_Started",true);
+milestoneupdateMap.put("CAD_Start_Date_Time",mod_time);
+// CAD Complete
+milestoneupdateMap.put("CAD_is_Uploaded",true);
+milestoneupdateMap.put("CAD_Complete_Date_Time",mod_time);
+// Permit Submitted
+milestoneupdateMap.put("Permit_Submitted",true);
+milestoneupdateMap.put("Permit_Submitted_Date_Time",mod_time);
+//Notice to Proceed
+milestoneupdateMap.put("Notice_to_Proceed",true);
+milestoneupdateMap.put("NTP_Date_Time",mod_time);
+// Interconnection Submitted
+// 	milestoneupdateMap.put("Interconnection_Submitted",true);
+// 	milestoneupdateMap.put("Interconnection_Submitted_Date_Time",mod_time);
+// Permit Received
+milestoneupdateMap.put("Permit_Recieved_NA",true);
+// Install
+milestoneupdateMap.put("Install",true);
+//	Milestones Update End
+// info "Milestone map" + milestoneupdateMap;
+citiesWithNoPermit = {"tx":{"robert lee","balmorhea","barstow","coyanosa","goldsmith","grandfalls","imperial","mccamey","mertzon","pleasant valley","pyote","stanton","wink","kermit"},"ok":{"elgin","erick","minco","union city"}};
+// citiesWithNoPermitinTX = {"robert lee","balmorhea","barstow","coyanosa","goldsmith","grandfalls","imperial","mccamey","mertzon","pleasant valley","pyote","stanton","wink","kermit"};
+// citiesWithNoPermitinOK = {"elgin","erick","minco","union city"};
+info url;
+response = invokeurl
+[
+	url :url
+	type :GET
+];
+// info response;
+addressMatches = response.get("result").get("addressMatches");
+// addressMatches = addressMatches.get("addressMatches");
+// info "Address Matches : " + addressMatches;
+if(addressMatches.isBlank())
+{
+	lat = "Please manually check whether a permit is requried or not";
+	long = "Please manually check whether a permit is requried or not";
+	latLongMap.put("googlemapreports__Latitude",lat);
+	latLongMap.put("googlemapreports__Longitude",long);
+	info "Address Matches is blank";
+	response = zoho.crm.updateRecord("Accounts",accountId,latLongMap);
+	info milestoneupdateMap;
+	info response;
+}
+if(!addressMatches.isBlank())
+{
+	result = addressMatches.get(0);
+	lat = result.get("coordinates").get("y");
+	long = result.get("coordinates").get("x");
+	inCity = zoho.map.rGeoCode(lat,long);
+	info inCity;
+	lat = lat.text("##.###") + " N";
+	long = long.text("##.###") + " W";
+	long = replaceAll(long,"-"," ");
+	milestoneupdateMap.put("googlemapreports__Latitude",lat);
+	milestoneupdateMap.put("googlemapreports__Longitude",long);
+	//Adding lat long to the latLongMap for permit not required check statement crm updates
+	latLongMap.put("googlemapreports__Latitude",lat);
+	latLongMap.put("googlemapreports__Longitude",long);
+	if(inCity.containKey("town"))
+	{
+		inCityName = inCity.get("town").get(0);
+		if(citiesWithNoPermit.get("tx").contains(inCityName.lower()) || citiesWithNoPermit.get("ok").contains(inCityName.lower()))
+		{
+			info "Town is in no permit map : " + inCityName;
+			milestoneupdateMap.put("No_Permit_Requires",true);
+			response = zoho.crm.updateRecord("Accounts",accountId,milestoneupdateMap);
+			info milestoneupdateMap;
+			info response;
+		}
+		else
+		{
+			info "Contains a Town but Town is NOT in no permit map. PERMIT REQUIRED : " + inCityName;
+			response = zoho.crm.updateRecord("Accounts",accountId,latLongMap);
+			info milestoneupdateMap;
+			info response;
+		}
+	}
+	else if(inCity.containsKey("city"))
+	{
+		inCityName = inCity.get("city");
+		if(citiesWithNoPermit.get("tx").contains(inCityName.lower()) || citiesWithNoPermit.get("ok").contains(inCityName.lower()))
+		{
+			info "City is in no permit map : " + inCityName;
+			milestoneupdateMap.put("No_Permit_Requires",true);
+			response = zoho.crm.updateRecord("Accounts",accountId,milestoneupdateMap);
+			info milestoneupdateMap;
+			info response;
+		}
+		else
+		{
+			info "Contains a City but City is NOT in no permit map. PERMIT REQUIRED : " + inCityName;
+			response = zoho.crm.updateRecord("Accounts",accountId,latLongMap);
+			info latLongMap;
+			info response;
+		}
+	}
+	else
+	{
+		milestoneupdateMap.put("No_Permit_Requires",true);
+		info "Outside city limits";
+		response = zoho.crm.updateRecord("Accounts",accountId,milestoneupdateMap);
+		info milestoneupdateMap;
+		info response;
+	}
+}
+account = zoho.crm.getRecordById("Accounts",accountId);
+no_permit_req = account.get("No_Permit_Requires");
+info no_permit_req;
+customerPhone = account.get("Phone");
+customerName = account.get("Account_Name");
+closerName = account.get("Closer");
+closerPhone = account.get("Sales_Rep_Phone");
+// info customerPhone;
+// info customerName;
+// info closerName;
+// info closerPhone;
+// Welcome Message not used
+// welcomeMsg = "Hello, " + customerName + "! Thank you for choosing PAIC Solar! We will be sending you an email that explains what you can expect throughout the process of your Solar Installation. We encourage you to take the time to review it carefully. If you have any questions, simply reply to this message and our Customer Advocate team will be happy to help! ☀️ PAIC Solar ";
+closerCongratsMsg = "☀️ Congratulations on helping " + customerName + " become an Energy Independence Leader! We have completed their welcome call and have moved their account to the installation stage (no-permit account). Please submit any necessary information and check your project tasks for updates.";
+// anitaSMS = "Hey, " + closerName + "! Congratulations on helping " + customerName + " become an Energy Independence Leader!" + "\n" + "\n" + "We have completed " + customerName + "'s welcome call. Please submit any necessary information using the lead form link and check your project tasks for updates." + "\n" + "\n" + englishForm + "\n" + "\n" + spanishForm;
+// customerSSmsg = "☀️ Hello, " + customerName + "! Your Account has moved to Installation. We’re sending you an email with more information. Please take a moment to review it. Best, PAIC";
+// closerSSmsg = "☀️ Hello! " + customerName + "'s account has moved to Installation! Please check your project tasks for updates.";
+if(no_permit_req == true)
+{
+	// 	Closer Congrats
+	sendsms
+	[
+		from:+14323150086
+		to :closerPhone
+		message:closerCongratsMsg
+		connection:"twilliomilestonesconnection"
+];
+	//Install Message to customer
+	// Condensed in Smooth message
+	// 	sendsms
+	// 	[
+	// 		from:+14323150086
+	// 		to :customerPhone
+	// 		message:customerSSmsg
+	// 		connection:"twilliomilestonesconnection"
+	// ];
+	//Install Message to closer
+	// 	sendsms
+	// 	[
+	// 		from:+14323150086
+	// 		to :closerPhone
+	// 		message:closerSSmsg
+	// 		connection:"twilliomilestonesconnection"
+	// ];
+}

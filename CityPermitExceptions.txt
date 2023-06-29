@@ -1,0 +1,50 @@
+citiesWithNoPermit = {"Robert Lee","Balmorhea","Barstow","Coyanosa","Goldsmith","Grandfalls","Imperial","McCamey","Mertzon","Pleasant Valley","Pyote","Stanton","Wink","Kermit"};
+account = zoho.crm.getRecordById("Accounts",accountId);
+account_street = account.get("Billing_Street");
+account_state = account.get("Billing_State");
+account_zip = account.get("Billing_Code");
+account_city = account.get("Billing_City");
+newstreet = replaceAll(account_street," ","+");
+newCity = replaceAll(account_city," ","+");
+newState = replaceAll(account_state," ","+");
+url = "https://geocoding.geo.census.gov/geocoder/locations/address?street=" + newstreet + "&city=" + newCity + "&state=" + account_state + "&zip=" + account_zip + "&benchmark=Public_AR_Census2020&format=json";
+info url;
+response = invokeurl
+[
+	url :url
+	type :GET
+];
+info response;
+latLongMap = Map();
+milestoneupdateMap = Map();
+addressMatches = response.get("result");
+addressMatches = addressMatches.get("addressMatches");
+if(addressMatches.isBlank())
+{
+	lat = "Please manually check whether a permit is requried or not";
+	long = "Please manually check whether a permit is requried or not";
+	milestoneupdateMap.put("googlemapreports__Latitude",lat);
+	milestoneupdateMap.put("googlemapreports__Longitude",long);
+	response = zoho.crm.updateRecord("Accounts",accountId,milestoneupdateMap);
+}
+else
+{
+	result = response.get("result").get("addressMatches").get(0);
+	lat = result.get("coordinates").get("y");
+	long = result.get("coordinates").get("x");
+	inCity = zoho.map.rGeoCode(lat,long);
+	if(!inCity.containKey("town") && !inCity.containKey("city"))
+	{
+		milestoneupdateMap.put("Permit_Requires",true);
+	}
+	if(citiesWithNoPermit.contains(inCity.get("city")) || citiesWithNoPermit.contains(inCity.get("town")))
+	{
+		milestoneupdateMap.put("Permit_Requires",true);
+	}
+	lat = lat.text("##.###") + " N";
+	long = long.text("##.###") + " W";
+	long = replaceAll(long,"-"," ");
+	milestoneupdateMap.put("googlemapreports__Latitude",lat);
+	milestoneupdateMap.put("googlemapreports__Longitude",long);
+	response = zoho.crm.updateRecord("Accounts",accountId,milestoneupdateMap);
+}
